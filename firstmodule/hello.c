@@ -1,10 +1,14 @@
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/sched.h>
+
 MODULE_LICENSE("Dual BSD/GPL");
 
 static int hello_init(void)
 {
+    
     printk(KERN_ALERT "hello, kernel\n");
+    printk(KERN_ALERT "pid is %u , name is %s\n", current->pid, current->comm);
     return 0;
 }
 
