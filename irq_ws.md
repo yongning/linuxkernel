@@ -1,4 +1,4 @@
-`c`
+```c
 void __init init_IRQ(void)
 {
     init_irq_stacks();
@@ -6,5 +6,5 @@ void __init init_IRQ(void)
     if (!handle_arch_irq)
         panic("No interrupt controller found.");
 }
-`c`
+```
 
