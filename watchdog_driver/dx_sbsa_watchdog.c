@@ -1,3 +1,11 @@
+/*
+ * note:
+ * standard Arm sbsa watchdog driver extracted from upstream 4.19 kernel source
+ * later when commercial Linux distributor supports standard Arm sbsa watchdog, 
+ * this driver can be replaced and application maintains the same kernel watchdog
+ * programming model
+ */
+
 #include <linux/io.h>
 #include <linux/io-64-nonatomic-lo-hi.h>
 #include <linux/interrupt.h>
@@ -42,10 +50,12 @@ MODULE_PARM_DESC(timeout,
 		"Watchdog timeout in seconds. (>=0, default="
 		__MODULE_STRING(DEFAULT_TIMEOUT) ")");
 
+/* current version suggest using single mode, action = 0 */
 static int action;
 module_param(action, int, 0);
 MODULE_PARM_DESC(action, "after watchdog gets WS0 interrupt, do:"
 		"0 = skip(*) 1 = panic");
+
 static bool nowayout = WATCHDOG_NOWAYOUT;
 module_param(nowayout, bool, S_IRUGO);
 MODULE_PARM_DESC(nowayout, 
@@ -68,7 +78,6 @@ static int sbsa_gwdt_set_timeout(struct watchdog_device* wdd,
 
     return 0;
 }
-
 
 static unsigned int sbsa_gwdt_get_timeleft(struct watchdog_device* wdd)
 {
@@ -96,7 +105,6 @@ static int sbsa_gwdt_keepalive(struct watchdog_device* wdd)
     return 0;
 }
 
-
 static int sbsa_gwdt_start(struct watchdog_device* wdd)
 {
     struct sbsa_gwdt* gwdt = watchdog_get_drvdata(wdd);
@@ -106,8 +114,6 @@ static int sbsa_gwdt_start(struct watchdog_device* wdd)
     return 0;
 }
 
-
-
 static int sbsa_gwdt_stop(struct watchdog_device* wdd)
 {
     struct sbsa_gwdt* gwdt = watchdog_get_drvdata(wdd);
@@ -116,7 +122,6 @@ static int sbsa_gwdt_stop(struct watchdog_device* wdd)
 
     return 0;
 }
-
 
 static irqreturn_t sbsa_gwdt_interrupt(int irq, void* dev_id)
 {
@@ -183,9 +188,6 @@ static int sbsa_gwdt_probe(struct platform_device* pdev)
 
     status = readl(cf_base + SBSA_GWDT_WCS);
 
-    printk(KERN_ERR "==== yongningf ==== watchdog status is ====\n");
-    printk(KERN_ERR "==== yongningf ==== 0x%x ====\n", status);
-
     if (status & SBSA_GWDT_WCS_WS1) {
 	dev_warn(dev, "System reset by WDT.\n");
 	wdd->bootstatus |= WDIOF_CARDRESET;
@@ -229,7 +231,6 @@ static int sbsa_gwdt_probe(struct platform_device* pdev)
     return 0;
 }
 
-
 static void sbsa_gwdt_shutdown(struct platform_device* pdev)
 {
     struct sbsa_gwdt* gwdt = platform_get_drvdata(pdev);
@@ -250,10 +251,8 @@ static int __maybe_unused sbsa_gwdt_suspend(struct device* dev)
 {
     struct sbsa_gwdt* gwdt = dev_get_drvdata(dev);
 
-    if (watchdog_active(&gwdt->wdd)) {
-	printk(KERN_ERR "====yongningf ==== before suspend stop watchdog ====== \n");
+    if (watchdog_active(&gwdt->wdd)) 
 	sbsa_gwdt_stop(&gwdt->wdd);
-    }
 
     return 0;
 }
@@ -262,10 +261,8 @@ static int __maybe_unused sbsa_gwdt_resume(struct device* dev)
 {
     struct sbsa_gwdt* gwdt = dev_get_drvdata(dev);
 
-    if (watchdog_active(&gwdt->wdd)) {
-	printk(KERN_ERR "====yongningf ==== before resume start watchdog ==== \n");
+    if (watchdog_active(&gwdt->wdd)) 
 	sbsa_gwdt_start(&gwdt->wdd);
-    }
 
     return 0;
 }
