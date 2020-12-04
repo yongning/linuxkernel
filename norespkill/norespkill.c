@@ -12,6 +12,7 @@
 
 #include <linux/timer.h>
 #include <linux/jiffies.h>
+#include <linux/string.h>
 
 #include <linux/list.h>
 
@@ -21,34 +22,74 @@ void norespkill_timer_cb(struct timer_list*);
 
 static unsigned long noresp_scan(unsigned char* name, unsigned long control);
 
+static int number = 0;
+static int preset = 5;
+
 void norespkill_timer_cb(struct timer_list* timer)
 {
+    number++;
+    if (number <= preset) {
+        noresp_scan(NULL, 2);
 
-    noresp_scan(NULL, 0);
+        mod_timer(&norespkill_timer, jiffies + msecs_to_jiffies(1000 * 600));
+    } else {
+        noresp_scan(NULL, 1);
+        del_timer(&norespkill_timer);
+        printk(KERN_ALERT "====ynf del timer ====\n");
+    }
 
-    mod_timer(&norespkill_timer, jiffies + msecs_to_jiffies(1000 * 60));
-
-    noresp_scan(NULL, 1);
+    // mod_timer(&norespkill_timer, jiffies + msecs_to_jiffies(1000 * 600));
+    
+    // noresp_scan(NULL, 2);
 
 }
 
 static unsigned long noresp_scan(unsigned char* name, unsigned long control)
 {
     struct task_struct* tsk;
-    /* struct task_struct* selected = NULL; */
+    struct task_struct* selected = NULL;
+    unsigned char tsk_name_tmp[32];
 
-    if (control == 1) {
-        del_timer(&norespkill_timer);
-        printk(KERN_ERR "==== ynf del timer ====\n");
+    if (control == 0) {
+       /*  del_timer(&norespkill_timer); */
+        printk(KERN_ALERT "==== ynf tsk time is: %d ====\n", number);
         return 1;
     }
 
     rcu_read_lock();
     for_each_process(tsk) {
-        struct task_struct* p;
+        /* struct task_struct* p; */
         if (tsk->flags & PF_KTHREAD)
             continue;
-        printk(KERN_ERR "========ynf tsk comm is %s ==== \n", tsk->comm);
+        if (control == 2) {
+            printk(KERN_ALERT "==== thread name is %s ====\n", tsk->comm);
+        }
+ 
+        if (control == 1) {
+            strcpy(tsk_name_tmp, tsk->comm);
+            if (strncmp(tsk_name_tmp, "genload", sizeof("genload")) == 0) {
+                printk(KERN_ALERT "======ynf find genload ==== \n");
+                selected = tsk;
+                task_lock(selected);
+                send_sig(SIGKILL, selected, 0);
+                task_unlock(selected);
+            }
+            if (strncmp(tsk_name_tmp, "ltp-pan", sizeof("ltp-pan")) == 0) {
+                printk(KERN_ALERT "====== ynf find ltp-pan ==== \n");
+                selected = tsk;
+                task_lock(selected);
+                send_sig(SIGKILL, selected, 0);
+                task_unlock(selected);
+            }
+
+            if (memcmp(tsk_name_tmp, "run_ltp_test", sizeof("run_ltp_test")) == 0) {
+                printk(KERN_ALERT "====== ynf find run_ltp_test ==== \n");
+                selected = tsk;
+                task_lock(selected);
+                send_sig(SIGKILL, selected, 0);
+                task_unlock(selected);
+            }
+        }
     }
     rcu_read_unlock();
 
@@ -59,7 +100,7 @@ static int norespkill_init(void)
 {
     printk(KERN_ALERT "Hello, norespkill\n");
     timer_setup(&norespkill_timer, norespkill_timer_cb, 0);
-    mod_timer(&norespkill_timer, jiffies + msecs_to_jiffies(1000 * 60));
+    mod_timer(&norespkill_timer, jiffies + msecs_to_jiffies(1000 * 600));
 
 
     /* noresp_scan(NULL, 0); */
