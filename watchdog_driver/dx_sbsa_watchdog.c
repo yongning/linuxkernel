@@ -183,9 +183,6 @@ static int sbsa_gwdt_probe(struct platform_device* pdev)
 
     status = readl(cf_base + SBSA_GWDT_WCS);
 
-    printk(KERN_ERR "==== yongningf ==== watchdog status is ====\n");
-    printk(KERN_ERR "==== yongningf ==== 0x%x ====\n", status);
-
     if (status & SBSA_GWDT_WCS_WS1) {
 	dev_warn(dev, "System reset by WDT.\n");
 	wdd->bootstatus |= WDIOF_CARDRESET;
@@ -250,10 +247,8 @@ static int __maybe_unused sbsa_gwdt_suspend(struct device* dev)
 {
     struct sbsa_gwdt* gwdt = dev_get_drvdata(dev);
 
-    if (watchdog_active(&gwdt->wdd)) {
-	printk(KERN_ERR "====yongningf ==== before suspend stop watchdog ====== \n");
+    if (watchdog_active(&gwdt->wdd)) 
 	sbsa_gwdt_stop(&gwdt->wdd);
-    }
 
     return 0;
 }
@@ -262,10 +257,8 @@ static int __maybe_unused sbsa_gwdt_resume(struct device* dev)
 {
     struct sbsa_gwdt* gwdt = dev_get_drvdata(dev);
 
-    if (watchdog_active(&gwdt->wdd)) {
-	printk(KERN_ERR "====yongningf ==== before resume start watchdog ==== \n");
+    if (watchdog_active(&gwdt->wdd)) 
 	sbsa_gwdt_start(&gwdt->wdd);
-    }
 
     return 0;
 }
