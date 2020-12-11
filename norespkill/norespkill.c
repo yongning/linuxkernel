@@ -1,21 +1,36 @@
-#include <linux/init.h>
+#include <linux/module.h>
 #include <linux/moduleparam.h>
+
+#include <linux/init.h>
+
+#include <linux/types.h>
+#include <linux/fs.h>
+
+#include <linux/cdev.h>
+
 #include <linux/kernel.h>
 #include <linux/mm.h>
+#include <linux/slab.h>
+
 #include <linux/sched.h>
 #include <linux/swap.h>
 #include <linux/profile.h>
 #include <linux/notifier.h>
 
-#include <linux/module.h>
 #include <linux/device.h>
 
 #include <linux/timer.h>
 #include <linux/jiffies.h>
 #include <linux/string.h>
 
+#include <asm/uaccess.h>
+
 #include <linux/list.h>
 
+static unsigned int noresp_minor = 0;
+static unsigned int noresp_major;
+
+struct noresp_dev* noresp_device;
 
 struct timer_list norespkill_timer;
 void norespkill_timer_cb(struct timer_list*);
@@ -24,6 +39,14 @@ static unsigned long noresp_scan(unsigned char* name, unsigned long control);
 
 static int number = 0;
 static int preset = 5;
+
+struct noresp_dev {
+    unsigned int timenumber;
+    unsigned int curr;
+    unsigned int timeinterval; /* min */
+    struct cdev cdev;
+};
+
 
 void norespkill_timer_cb(struct timer_list* timer)
 {
@@ -82,7 +105,7 @@ static unsigned long noresp_scan(unsigned char* name, unsigned long control)
                 task_unlock(selected);
             }
 
-            if (memcmp(tsk_name_tmp, "run_ltp_test", sizeof("run_ltp_test")) == 0) {
+            if (strncmp(tsk_name_tmp, "run_ltp_test.sh", sizeof("run_ltp_test.sh")) == 0) {
                 printk(KERN_ALERT "====== ynf find run_ltp_test ==== \n");
                 selected = tsk;
                 task_lock(selected);
@@ -96,20 +119,117 @@ static unsigned long noresp_scan(unsigned char* name, unsigned long control)
     return 0;
 }
 
+ssize_t noresp_read(struct file* filp, char __user* buf, size_t count, loff_t* offp)
+{
+   struct noresp_dev* dev;
+   int retval;
+
+   dev = filp->private_data;
+   if (copy_to_user(buf, (char *)&dev->curr, sizeof(unsigned int))) {
+       retval = -EFAULT;
+       return retval;
+   }
+   return (sizeof(unsigned int));
+}
+
+ssize_t noresp_write(struct file* filp, const char __user* buf, size_t count, loff_t* f_pos)
+{
+    struct noresp_dev* dev;
+    int retval;
+
+    dev = filp->private_data;
+    if (copy_from_user((char *)&dev->timenumber, buf, sizeof(unsigned int))) {
+	retval = -EFAULT;
+	return retval;
+    }
+    
+    return (sizeof(unsigned int));
+}
+
+int noresp_release(struct inode* inode, struct file* filp)
+{
+    return 0;
+}
+
+int noresp_open(struct inode* inode, struct file* filp)
+{
+    struct noresp_dev* dev;
+    
+    dev = container_of(inode->i_cdev, struct noresp_dev, cdev);
+    dev->timenumber = 0;
+    dev->curr = 0;
+    dev->timeinterval = 0;
+
+    filp->private_data = dev;
+
+    return 0;
+}
+
+struct file_operations noresp_fops = {
+    .owner = THIS_MODULE,
+    .read = noresp_read,
+    .write = noresp_write,
+ //   .ioctl = noresp_ioctl,
+    .open = noresp_open,
+    .release = noresp_release,
+};
+
+static void noresp_setup_cdev(struct noresp_dev* dev, int index)
+{
+    int err, devno;
+
+    devno = MKDEV(noresp_major, noresp_minor + index);
+
+    cdev_init(&dev->cdev, &noresp_fops);
+    dev->cdev.owner = THIS_MODULE;
+    dev->cdev.ops = &noresp_fops;
+    err = cdev_add(&dev->cdev, devno, 1);
+    if (err)
+	printk(KERN_WARNING "noresp error add devcie\n");
+    
+}
+
 static int norespkill_init(void)
 {
-    printk(KERN_ALERT "Hello, norespkill\n");
-    timer_setup(&norespkill_timer, norespkill_timer_cb, 0);
-    mod_timer(&norespkill_timer, jiffies + msecs_to_jiffies(1000 * 600));
+    int result;
+    dev_t dev;
+    unsigned int noresp_devcnt = 1;
+    
+    printk(KERN_WARNING "Hello, norespkill\n");
+
+    result = alloc_chrdev_region(&dev, noresp_minor, noresp_devcnt, "norespkill");
+    if (result < 0) {
+	printk(KERN_WARNING "norespkill: can't get major dev \n");
+	return result;
+    }
+    noresp_major = MAJOR(dev);
+
+    noresp_device = kmalloc(sizeof(struct noresp_dev), GFP_KERNEL);
+    if (!noresp_device) {
+	printk(KERN_WARNING "norespkill no memory for device \n");
+	result = -ENOMEM;
+	goto no_mem;
+    }
+    memset(noresp_device, 0, sizeof(struct noresp_dev));
+    noresp_setup_cdev(noresp_device, 0);
+    // timer_setup(&norespkill_timer, norespkill_timer_cb, 0);
+    // mod_timer(&norespkill_timer, jiffies + msecs_to_jiffies(1000 * 600));
 
 
     /* noresp_scan(NULL, 0); */
     return 0;
+
+no_mem:
+    unregister_chrdev_region(dev, noresp_devcnt);
+    return result;    
 }
 
 static void norespkill_exit(void)
 {
     printk(KERN_ALERT "Goodbye, norespkill\n");
+    cdev_del(&noresp_device->cdev);
+    kfree(noresp_device);
+    unregister_chrdev_region(MKDEV(noresp_major, noresp_minor), 1);
 }
 
 module_init(norespkill_init);
