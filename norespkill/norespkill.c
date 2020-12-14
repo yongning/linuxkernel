@@ -6,6 +6,7 @@
 #include <linux/types.h>
 #include <linux/fs.h>
 
+#include <linux/ioctl.h>
 #include <linux/cdev.h>
 
 #include <linux/kernel.h>
@@ -26,6 +27,10 @@
 #include <asm/uaccess.h>
 
 #include <linux/list.h>
+
+#define NORESPKILL_IOC_MAGIC 'N'
+#define NORESPKILL_IOCSTIME _IOW(NORESPKILL_IOC_MAGIC, 1, int)
+#define NORESPKILL_IOCGTIME _IOR(NORESPKILL_IOC_MAGIC, 2, int)
 
 static unsigned int noresp_minor = 0;
 static unsigned int noresp_major;
@@ -162,14 +167,49 @@ int noresp_open(struct inode* inode, struct file* filp)
 
     filp->private_data = dev;
 
+    timer_setup(&norespkill_timer, norespkill_timer_cb, 0);
+    
     return 0;
+}
+
+long noresp_ioctl(struct file* filp, unsigned int cmd, unsigned long arg)
+{
+    int err = 0, ret = 0;
+    struct noresp_dev* dev;
+
+    if (_IOC_DIR(cmd & _IOC_READ))
+	err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
+    else if (_IOC_DIR(cmd & _IOC_WRITE))
+        err = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
+    if (err)
+        return -EFAULT;
+
+    dev = filp->private_data;
+    
+    switch (cmd) {
+    case NORESPKILL_IOCSTIME:
+        ret = __get_user(dev->timenumber, (int __user *)arg);
+	preset = dev->timenumber;
+        mod_timer(&norespkill_timer, jiffies + msecs_to_jiffies(1000 * 600));
+        break;
+    case NORESPKILL_IOCGTIME:
+	dev->curr = number;
+        ret = __put_user(dev->curr, (int __user *)arg);
+        break;
+    default:
+        ret = -ENOTTY;
+        break;
+    }
+
+    return ret;
+
 }
 
 struct file_operations noresp_fops = {
     .owner = THIS_MODULE,
     .read = noresp_read,
     .write = noresp_write,
- //   .ioctl = noresp_ioctl,
+    .compat_ioctl = noresp_ioctl,
     .open = noresp_open,
     .release = noresp_release,
 };
