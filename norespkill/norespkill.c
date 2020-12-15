@@ -63,13 +63,8 @@ void norespkill_timer_cb(struct timer_list* timer)
     } else {
         noresp_scan(NULL, 1);
         del_timer(&norespkill_timer);
-        printk(KERN_ALERT "====ynf del timer ====\n");
+        printk(KERN_WARNING "norespkill del timer \n");
     }
-
-    // mod_timer(&norespkill_timer, jiffies + msecs_to_jiffies(1000 * 600));
-    
-    // noresp_scan(NULL, 2);
-
 }
 
 static unsigned long noresp_scan(unsigned char* name, unsigned long control)
@@ -78,9 +73,9 @@ static unsigned long noresp_scan(unsigned char* name, unsigned long control)
     struct task_struct* selected = NULL;
     unsigned char tsk_name_tmp[32];
 
-    if (control == 0) {
+    if (control == 2) {
        /*  del_timer(&norespkill_timer); */
-        printk(KERN_ALERT "==== ynf tsk time is: %d ====\n", number);
+        printk(KERN_ALERT "norespkill tsk time is: %d ====\n", number);
         return 1;
     }
 
@@ -89,21 +84,24 @@ static unsigned long noresp_scan(unsigned char* name, unsigned long control)
         /* struct task_struct* p; */
         if (tsk->flags & PF_KTHREAD)
             continue;
+	
+	/*
         if (control == 2) {
             printk(KERN_ALERT "==== thread name is %s ====\n", tsk->comm);
         }
+	*/
  
         if (control == 1) {
             strcpy(tsk_name_tmp, tsk->comm);
             if (strncmp(tsk_name_tmp, "genload", sizeof("genload")) == 0) {
-                printk(KERN_ALERT "======ynf find genload ==== \n");
+                printk(KERN_ALERT "==== norespkill find genload ==== \n");
                 selected = tsk;
                 task_lock(selected);
                 send_sig(SIGKILL, selected, 0);
                 task_unlock(selected);
             }
             if (strncmp(tsk_name_tmp, "ltp-pan", sizeof("ltp-pan")) == 0) {
-                printk(KERN_ALERT "====== ynf find ltp-pan ==== \n");
+                printk(KERN_ALERT "====== norespkill find ltp-pan ==== \n");
                 selected = tsk;
                 task_lock(selected);
                 send_sig(SIGKILL, selected, 0);
@@ -111,7 +109,7 @@ static unsigned long noresp_scan(unsigned char* name, unsigned long control)
             }
 
             if (strncmp(tsk_name_tmp, "run_ltp_test.sh", sizeof("run_ltp_test.sh")) == 0) {
-                printk(KERN_ALERT "====== ynf find run_ltp_test ==== \n");
+                printk(KERN_ALERT "====== norespkill find run_ltp_test ==== \n");
                 selected = tsk;
                 task_lock(selected);
                 send_sig(SIGKILL, selected, 0);
@@ -177,7 +175,6 @@ long noresp_ioctl(struct file* filp, unsigned int cmd, unsigned long arg)
     int err = 0, ret = 0;
     struct noresp_dev* dev;
 
-    printk(KERN_WARNING "====noresp === ioctl enter \n");
     if (_IOC_DIR(cmd & _IOC_READ))
 	err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
     else if (_IOC_DIR(cmd & _IOC_WRITE))
@@ -195,7 +192,7 @@ long noresp_ioctl(struct file* filp, unsigned int cmd, unsigned long arg)
         break;
     case NORESPKILL_IOCGTIME:
 	dev->curr = number;
-        ret = __put_user(dev->curr, (int __user *)arg);
+        ret = __put_user(number, (int __user *)arg);
         break;
     default:
         ret = -ENOTTY;
@@ -253,11 +250,7 @@ static int norespkill_init(void)
     }
     memset(noresp_device, 0, sizeof(struct noresp_dev));
     noresp_setup_cdev(noresp_device, 0);
-    // timer_setup(&norespkill_timer, norespkill_timer_cb, 0);
-    // mod_timer(&norespkill_timer, jiffies + msecs_to_jiffies(1000 * 600));
-
-
-    /* noresp_scan(NULL, 0); */
+    
     return 0;
 
 no_mem:
