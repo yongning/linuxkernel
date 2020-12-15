@@ -177,6 +177,7 @@ long noresp_ioctl(struct file* filp, unsigned int cmd, unsigned long arg)
     int err = 0, ret = 0;
     struct noresp_dev* dev;
 
+    printk(KERN_WARNING "====noresp === ioctl enter \n");
     if (_IOC_DIR(cmd & _IOC_READ))
 	err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
     else if (_IOC_DIR(cmd & _IOC_WRITE))
@@ -209,7 +210,7 @@ struct file_operations noresp_fops = {
     .owner = THIS_MODULE,
     .read = noresp_read,
     .write = noresp_write,
-    .compat_ioctl = noresp_ioctl,
+    .unlocked_ioctl = noresp_ioctl,
     .open = noresp_open,
     .release = noresp_release,
 };
