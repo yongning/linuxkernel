@@ -92,6 +92,11 @@ static unsigned long noresp_scan(unsigned char* name, unsigned long control)
 	*/
  
         if (control == 1) {
+            if (strlen(tsk->comm) > 31) {
+                printk(KERN_ERR "==== norespkill tsk-comm length over limit === \n");
+                continue;
+            }
+
             strcpy(tsk_name_tmp, tsk->comm);
             if (strncmp(tsk_name_tmp, "genload", sizeof("genload")) == 0) {
                 printk(KERN_ALERT "==== norespkill find genload ==== \n");
